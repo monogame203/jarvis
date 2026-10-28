@@ -440,7 +440,11 @@ def _check_screen_recording_sync() -> Check:
 
 
 def _check_fish_api_key_sync() -> Check:
-    """FISH_API_KEY must be set or JARVIS has no voice."""
+    """FISH_API_KEY must be set or JARVIS has no voice — unless he speaks via Edge."""
+    provider = (os.environ.get("TTS_PROVIDER") or "").strip().lower()
+    if provider == "edge" or (not provider and not os.environ.get("FISH_API_KEY")):
+        return Check(name="fish_api_key", status=STATUS_OK,
+                     message="TTS_PROVIDER=edge: speaking with free Edge voices, no Fish key needed.")
     if os.environ.get("FISH_API_KEY"):
         return Check(name="fish_api_key", status=STATUS_OK, message="FISH_API_KEY is set.")
     return Check(

@@ -390,10 +390,21 @@ def test_fish_api_key_present(monkeypatch):
 
 
 def test_fish_api_key_absent(monkeypatch):
+    monkeypatch.setenv("TTS_PROVIDER", "fish")
     monkeypatch.delenv("FISH_API_KEY", raising=False)
     check = preflight._check_fish_api_key_sync()
     assert check.status == STATUS_FAIL
     assert check.remedy
+
+
+def test_edge_provider_needs_no_fish_key(monkeypatch):
+    monkeypatch.delenv("FISH_API_KEY", raising=False)
+    for provider in ("edge", None):          # explicit, or the keyless default
+        if provider:
+            monkeypatch.setenv("TTS_PROVIDER", provider)
+        else:
+            monkeypatch.delenv("TTS_PROVIDER", raising=False)
+        assert preflight._check_fish_api_key_sync().status == STATUS_OK
 
 
 # --- leftover ANTHROPIC_* ------------------------------------------------------

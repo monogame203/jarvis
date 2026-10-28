@@ -1,11 +1,18 @@
 """
-tts.py — Fish Audio synthesis, one request per sentence chunk.
+tts.py — speech synthesis, one request per sentence chunk.
 
-The response is streamed so time-to-first-byte can be measured; the chunk is
-returned whole because the browser decodes one complete MP3 per chunk.
+Two providers, both returning one complete MP3 per chunk because the browser
+decodes one complete MP3 per chunk:
+
+  fish  — Fish Audio (paid, the MCU JARVIS voice). Needs FISH_API_KEY.
+  edge  — Microsoft Edge's online read-aloud voices via `edge-tts` (free,
+          no key). Any Neural voice, e.g. en-GB-RyanNeural, ja-JP-KeitaNeural.
+
+The response is streamed so time-to-first-byte can be measured.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass
@@ -59,6 +66,44 @@ async def synthesize_chunk(text: str, *, api_key: str, voice_id: str,
                 await client.aclose()
             except Exception as e:      # never turn a clean None into an exception
                 log.debug(f"TTS client close failed: {e}")
+    if not buf:
+        return None
+    return SynthResult(bytes(buf), first if first is not None else 0.0, time.monotonic() - t0)
+
+
+async def synthesize_edge(text: str, *, voice: str, rate: str = "+0%",
+                          proxy: Optional[str] = None, timeout: float = 15.0) -> Optional[SynthResult]:
+    """Synthesize with Edge's free read-aloud service. None on any failure."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    try:
+        import edge_tts
+    except ImportError:
+        log.error("TTS_PROVIDER=edge but edge-tts is not installed (pip install edge-tts)")
+        return None
+    t0 = time.monotonic()
+    first: Optional[float] = None
+    buf = bytearray()
+
+    async def _run() -> None:
+        nonlocal first
+        comm = edge_tts.Communicate(text, voice, rate=rate, proxy=proxy)
+        async for part in comm.stream():
+            if part.get("type") != "audio":
+                continue
+            if first is None:
+                first = time.monotonic() - t0
+            buf.extend(part["data"])
+
+    try:
+        await asyncio.wait_for(_run(), timeout)
+    except asyncio.TimeoutError:
+        log.error(f"Edge TTS timed out for {text[:40]!r}")
+        return None
+    except Exception as e:      # edge-tts raises aiohttp and its own errors
+        log.error(f"Edge TTS error: {e}")
+        return None
     if not buf:
         return None
     return SynthResult(bytes(buf), first if first is not None else 0.0, time.monotonic() - t0)

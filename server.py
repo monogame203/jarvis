@@ -98,6 +98,11 @@ log = logging.getLogger("jarvis")
 FISH_API_KEY = os.getenv("FISH_API_KEY", "")
 FISH_VOICE_ID = os.getenv("FISH_VOICE_ID", "612b878b113047d9a770c069c8b4fdfe")  # JARVIS (MCU)
 FISH_API_URL = "https://api.fish.audio/v1/tts"
+# Which voice service speaks: "fish" (paid) or "edge" (free, no key). Defaults
+# to Fish when a key is set, so existing setups keep the JARVIS voice.
+TTS_PROVIDER = (os.getenv("TTS_PROVIDER") or ("fish" if FISH_API_KEY else "edge")).strip().lower()
+EDGE_VOICE = os.getenv("EDGE_VOICE", "en-GB-RyanNeural")
+EDGE_RATE = os.getenv("EDGE_RATE", "+0%")
 USER_NAME = os.getenv("USER_NAME", "sir")
 _SKIP_PERMISSIONS = os.getenv("JARVIS_SKIP_PERMISSIONS", "true").lower() not in ("0", "false", "no")
 
@@ -457,39 +462,17 @@ _last_greeting_time: float = 0
 
 
 # ---------------------------------------------------------------------------
-# TTS (Fish Audio)
+# TTS (Fish Audio or Edge, see TTS_PROVIDER)
 # ---------------------------------------------------------------------------
 
 async def synthesize_speech(text: str) -> Optional[bytes]:
-    """Generate speech audio from text using Fish Audio TTS."""
+    """Generate speech audio from text with the configured TTS provider."""
+    if TTS_PROVIDER == "edge":
+        return await _synth_for_speech(text)
     if not FISH_API_KEY:
         log.warning("FISH_API_KEY not set, skipping TTS")
         return None
-
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as http:
-            response = await http.post(
-                FISH_API_URL,
-                headers={
-                    "Authorization": f"Bearer {FISH_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "text": text,
-                    "reference_id": FISH_VOICE_ID,
-                    "format": "mp3",
-                },
-            )
-            if response.status_code == 200:
-                _session_tokens["tts_calls"] += 1
-                _append_usage_entry(0, 0, "tts")
-                return response.content
-            else:
-                log.error(f"TTS error: {response.status_code}")
-                return None
-    except Exception as e:
-        log.error(f"TTS error: {e}")
-        return None
+    return await _synth_for_speech(text)
 
 
 # ---------------------------------------------------------------------------
@@ -611,7 +594,12 @@ async def _voice_emit(msg: dict) -> None:
 
 
 async def _synth_for_speech(text: str) -> Optional[bytes]:
-    r = await tts.synthesize_chunk(text, api_key=FISH_API_KEY, voice_id=FISH_VOICE_ID, client=_tts_client)
+    if TTS_PROVIDER == "edge":
+        # aiohttp ignores HTTPS_PROXY, so hand it over explicitly.
+        r = await tts.synthesize_edge(text, voice=EDGE_VOICE, rate=EDGE_RATE,
+                                      proxy=os.getenv("HTTPS_PROXY") or os.getenv("https_proxy") or None)
+    else:
+        r = await tts.synthesize_chunk(text, api_key=FISH_API_KEY, voice_id=FISH_VOICE_ID, client=_tts_client)
     if r is None:
         return None
     _session_tokens["tts_calls"] += 1
@@ -6702,6 +6690,7 @@ async def voice_handler(ws: WebSocket):
 # a restart.
 SETTABLE_ENV_KEYS = frozenset({
     "FISH_API_KEY", "FISH_VOICE_ID", "USER_NAME", "HONORIFIC",
+    "TTS_PROVIDER", "EDGE_VOICE",
 })
 
 # A value may not carry anything that ends the line it is written on.
