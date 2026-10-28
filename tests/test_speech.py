@@ -1613,3 +1613,18 @@ async def test_the_quiet_room_bar_returns_once_his_audio_has_ended(h):
     await h.ack_all()
     await asyncio.sleep(0.05)
     assert not s.is_speaking
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("かしこまりました。ただいま確認いたします。", ["かしこまりました。", "ただいま確認いたします。"]),
+    ("本当ですか！？はい。", ["本当ですか！？", "はい。"]),
+    ("「完了しました。」次へ進みます。", ["「完了しました。」", "次へ進みます。"]),
+])
+def test_japanese_sentences_split_without_spaces(text, expected):
+    assert _split_all(text) == expected
+
+
+def test_japanese_speech_is_not_mistaken_for_echo():
+    from speech import _tokens
+    assert _tokens("こんにちは、ジャービス。") == list("こんにちはジャービス")
+    assert _tokens("Good evening, sir.") == ["good", "evening", "sir"]

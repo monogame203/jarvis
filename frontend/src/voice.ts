@@ -142,6 +142,13 @@ export function createMicMonitor(
   };
 }
 
+// Which language Web Speech listens for; the backend says (JARVIS_LANGUAGE).
+let speechLang = "en-US";
+fetch("/api/voice-config")
+  .then((r) => (r.ok ? r.json() : null))
+  .then((c) => { if (c && typeof c.speech_lang === "string") speechLang = c.speech_lang; })
+  .catch(() => { /* keep English */ });
+
 export function createVoiceInput(
   onTranscript: (text: string) => void,
   onInterim: (text: string) => void,
@@ -229,7 +236,7 @@ export function createVoiceInput(
     const sr = new SR();
     sr.continuous = true;
     sr.interimResults = true;
-    sr.lang = "en-US";
+    sr.lang = speechLang;
     const e: Engine = { sr, running: false, audio: false, startedAt: 0, stoppedAt: 0, retired: false };
 
     sr.onstart = () => {

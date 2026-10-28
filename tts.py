@@ -71,7 +71,7 @@ async def synthesize_chunk(text: str, *, api_key: str, voice_id: str,
     return SynthResult(bytes(buf), first if first is not None else 0.0, time.monotonic() - t0)
 
 
-async def synthesize_edge(text: str, *, voice: str, rate: str = "+0%",
+async def synthesize_edge(text: str, *, voice: str, rate: str = "+0%", pitch: str = "+0Hz",
                           proxy: Optional[str] = None, timeout: float = 15.0) -> Optional[SynthResult]:
     """Synthesize with Edge's free read-aloud service. None on any failure."""
     text = (text or "").strip()
@@ -88,7 +88,7 @@ async def synthesize_edge(text: str, *, voice: str, rate: str = "+0%",
 
     async def _run() -> None:
         nonlocal first
-        comm = edge_tts.Communicate(text, voice, rate=rate, proxy=proxy)
+        comm = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch, proxy=proxy)
         async for part in comm.stream():
             if part.get("type") != "audio":
                 continue

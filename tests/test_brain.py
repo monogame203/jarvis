@@ -1010,3 +1010,11 @@ async def test_invalid_utf8_line_does_not_kill_the_reader(tmp_path, caplog):
         # this the child outlives the test, keeps pytest's captured stdout,
         # and the suite hangs instead of reporting the failure.
         await _bounded(b.stop(), 20, b, "brain.stop()")
+
+
+def test_japanese_mode_tells_the_brain_to_reply_in_japanese(tmp_path):
+    import brain
+    ja = brain.Brain(_config(tmp_path, language="ja")).launch_prompt()
+    en = brain.Brain(_config(tmp_path)).launch_prompt()
+    assert "reply in natural spoken Japanese" in ja
+    assert "Japanese" not in en

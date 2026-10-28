@@ -65,8 +65,8 @@ async def test_empty_text_or_missing_key_short_circuits():
 class _FakeCommunicate:
     seen = {}
 
-    def __init__(self, text, voice, rate="+0%", proxy=None):
-        _FakeCommunicate.seen = {"text": text, "voice": voice, "rate": rate, "proxy": proxy}
+    def __init__(self, text, voice, rate="+0%", pitch="+0Hz", proxy=None):
+        _FakeCommunicate.seen = {"text": text, "voice": voice, "rate": rate, "pitch": pitch, "proxy": proxy}
 
     async def stream(self):
         yield {"type": "WordBoundary", "offset": 0}
@@ -79,9 +79,10 @@ async def test_edge_assembles_audio_chunks(monkeypatch):
     import types
     import tts
     monkeypatch.setitem(sys.modules, "edge_tts", types.SimpleNamespace(Communicate=_FakeCommunicate))
-    r = await tts.synthesize_edge("Good evening, sir.", voice="en-GB-RyanNeural", proxy="http://p")
+    r = await tts.synthesize_edge("Good evening, sir.", voice="en-GB-RyanNeural", pitch="-6Hz",
+                                  proxy="http://p")
     assert _FakeCommunicate.seen == {"text": "Good evening, sir.", "voice": "en-GB-RyanNeural",
-                                     "rate": "+0%", "proxy": "http://p"}
+                                     "rate": "+0%", "pitch": "-6Hz", "proxy": "http://p"}
     assert r is not None and r.audio == b"ID3" + b"\x00" * 10
 
 

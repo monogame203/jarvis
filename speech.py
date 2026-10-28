@@ -20,7 +20,10 @@ _ABBREVIATIONS = {
     "co", "no", "approx", "fig", "dept", "e.g", "i.e", "a.m", "p.m", "u.s", "u.k",
 }
 _CLOSERS = '"\')]'
-_CLAUSE_BREAKS = (", ", "; ", " — ", " – ", ": ")
+# Japanese sentence ends need no following space; closers may trail them.
+_JA_ENDS = "。！？"
+_JA_CLOSERS = "」』）"
+_CLAUSE_BREAKS = (", ", "; ", " — ", " – ", ": ", "、")
 _STRONG_BREAKS = (" — ", " – ", "; ", ": ")   # a pause a listener already expects
 
 
@@ -87,6 +90,13 @@ class SentenceSplitter:
     def _boundary(self, text: str) -> Optional[int]:
         i, n = 0, len(text)
         while i < n:
+            if text[i] in _JA_ENDS:
+                k = i + 1
+                while k < n and text[k] in _JA_ENDS + _JA_CLOSERS:
+                    k += 1
+                if k >= n:
+                    return None                      # a closer may still follow
+                return k
             if text[i] in ".!?":
                 j = i
                 while j < n and text[j] in ".!?":
@@ -226,7 +236,9 @@ SHORT_UTTERANCE_TOKENS = 2
 Synthesize = Callable[[str], Awaitable[Optional[bytes]]]
 Emit = Callable[[dict], Awaitable[None]]
 
-_TOKEN_RE = re.compile(r"[a-z0-9']+")
+# Japanese has no spaces, so each kana / kanji character is its own token;
+# without this a Japanese sentence has no tokens and is discarded as echo.
+_TOKEN_RE = re.compile(r"[a-z0-9']+|[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]")
 
 
 def _tokens(text: str) -> list[str]:

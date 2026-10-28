@@ -101,8 +101,12 @@ FISH_API_URL = "https://api.fish.audio/v1/tts"
 # Which voice service speaks: "fish" (paid) or "edge" (free, no key). Defaults
 # to Fish when a key is set, so existing setups keep the JARVIS voice.
 TTS_PROVIDER = (os.getenv("TTS_PROVIDER") or ("fish" if FISH_API_KEY else "edge")).strip().lower()
-EDGE_VOICE = os.getenv("EDGE_VOICE", "en-GB-RyanNeural")
+# "ja" makes JARVIS speak and listen in Japanese (see brain.py's launch prompt
+# and /api/voice-config); anything else is the original English butler.
+JARVIS_LANGUAGE = os.getenv("JARVIS_LANGUAGE", "en").strip().lower()
+EDGE_VOICE = os.getenv("EDGE_VOICE", "ja-JP-KeitaNeural" if JARVIS_LANGUAGE == "ja" else "en-GB-RyanNeural")
 EDGE_RATE = os.getenv("EDGE_RATE", "+0%")
+EDGE_PITCH = os.getenv("EDGE_PITCH", "+0Hz")
 USER_NAME = os.getenv("USER_NAME", "sir")
 _SKIP_PERMISSIONS = os.getenv("JARVIS_SKIP_PERMISSIONS", "true").lower() not in ("0", "false", "no")
 
@@ -596,7 +600,7 @@ async def _voice_emit(msg: dict) -> None:
 async def _synth_for_speech(text: str) -> Optional[bytes]:
     if TTS_PROVIDER == "edge":
         # aiohttp ignores HTTPS_PROXY, so hand it over explicitly.
-        r = await tts.synthesize_edge(text, voice=EDGE_VOICE, rate=EDGE_RATE,
+        r = await tts.synthesize_edge(text, voice=EDGE_VOICE, rate=EDGE_RATE, pitch=EDGE_PITCH,
                                       proxy=os.getenv("HTTPS_PROXY") or os.getenv("https_proxy") or None)
     else:
         r = await tts.synthesize_chunk(text, api_key=FISH_API_KEY, voice_id=FISH_VOICE_ID, client=_tts_client)
@@ -707,6 +711,12 @@ async def _on_brain_state(state: str, info: dict) -> None:
 
 def _greeting() -> str:
     hour = datetime.now().hour
+    if JARVIS_LANGUAGE == "ja":
+        if hour < 12:
+            return "おはようございます、ご主人様。"
+        if hour < 17:
+            return "こんにちは、ご主人様。"
+        return "こんばんは、ご主人様。"
     if hour < 12:
         return "Good morning, sir."
     if hour < 17:
@@ -1838,6 +1848,12 @@ app.add_middleware(web_auth.OriginGuard)
 @app.get("/api/health")
 async def health():
     return {"status": "online", "name": "JARVIS", "version": "0.1.0"}
+
+
+@app.get("/api/voice-config")
+async def voice_config():
+    """The language the browser's speech recognition listens for."""
+    return {"speech_lang": "ja-JP" if JARVIS_LANGUAGE == "ja" else "en-US"}
 
 
 @app.post("/api/tts-test")
@@ -6690,7 +6706,7 @@ async def voice_handler(ws: WebSocket):
 # a restart.
 SETTABLE_ENV_KEYS = frozenset({
     "FISH_API_KEY", "FISH_VOICE_ID", "USER_NAME", "HONORIFIC",
-    "TTS_PROVIDER", "EDGE_VOICE",
+    "TTS_PROVIDER", "EDGE_VOICE", "EDGE_RATE", "EDGE_PITCH", "JARVIS_LANGUAGE",
 })
 
 # A value may not carry anything that ends the line it is written on.
